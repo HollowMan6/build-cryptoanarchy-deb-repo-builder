@@ -1,0 +1,51 @@
+name: CADR CI
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [ master ]
+  pull_request:
+    branches: [ master ]
+
+env:
+  IMAGE_NAME: cadr/cadr
+  CI_SCRIPT: ci_build.sh
+
+jobs:
+  ci:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+      - name: Setup CI Build Script
+        run: |
+          tee -a $CI_SCRIPT <<EOF
+          #!/bin/bash
+          set -ex
+          apt-get update
+          cd CADR
+          MKCMD="make BUILD_DIR=/CADR/build"
+          \$MKCMD build-dep
+          \$MKCMD all
+          rm -f /etc/apt/sources.list.d/microsoft-prod.list
+          EOF
+          chmod +x $CI_SCRIPT
+      - name: Build CADR Running Environment Image
+        run: |
+          sudo apt-get update
+          sudo apt-get upgrade podman
+          sudo podman build -t $IMAGE_NAME .
+      - name: Spawn Podman Container to Prepare Running Environment
+        run: |
+          sudo podman run --tmpfs /tmp --tmpfs /run --tmpfs /run/lock -v /sys/fs/cgroup:/sys/fs/cgroup:ro --privileged --systemd=true -d -v `pwd`:/CADR --name=cadr $IMAGE_NAME
+      - name: Build CADR
+        run: |
+          sudo podman exec -i cadr /CADR/$CI_SCRIPT
+      - name: Upload Debian Packages Just Built to Artifact
+        uses: actions/upload-artifact@v2
+        if: ${{ always() }}
+        with:
+          name: CADR_debs
+          path: build/*.deb
+      - name: Test CADR
+        run: |
+          sudo podman exec -i cadr bash -c "cd CADR && make BUILD_DIR=/CADR/build TEST_ONLY_REGTEST=1 test"
