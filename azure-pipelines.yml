@@ -1,0 +1,60 @@
+trigger:
+- master
+- 'releases/**'
+
+pr:
+- '*'
+
+pool:
+  vmImage: ubuntu-latest
+
+resources:
+- repo: self
+
+variables:
+  IMAGE_NAME: docker.io/hollowman6/cadr
+  CI_SCRIPT: ci_build.sh
+
+steps:
+- script: |
+    tee -a $CI_SCRIPT <<EOF
+    #!/bin/bash
+    set -ex
+    apt-get update
+    cd CADR
+    MKCMD="make BUILD_DIR=/CADR/build"
+    \$MKCMD build-dep
+    \$MKCMD all
+    rm -f /etc/apt/sources.list.d/microsoft-prod.list
+    EOF
+    chmod +x $CI_SCRIPT
+  displayName: Setup CI Build Script
+
+- script: |
+    sudo apt-get update
+    sudo apt-get upgrade podman
+    sudo podman run --tmpfs /tmp --tmpfs /run --tmpfs /run/lock -v /sys/fs/cgroup:/sys/fs/cgroup:ro --privileged --systemd=true -d -v `pwd`:/CADR --name=cadr $IMAGE_NAME
+  displayName: Spawn Podman Container to Prepare Running Environment
+
+- script: |
+    sudo mkdir -p build
+    sudo pip install gdown
+    sudo gdown https://drive.google.com/uc?id=1aoj9upmFvuyFyEOlPEdCZuR24jA5BsLr
+    sudo unzip CADR_debs.zip -d build
+  displayName: Download from prebuilt Debian packages
+
+# # Timeout would exceed (over 1 hr)
+# - script: |
+#     sudo podman exec -i cadr /CADR/$CI_SCRIPT
+#   displayName: Build CADR
+
+- task: PublishBuildArtifacts@1
+  inputs:
+    pathtoPublish: build
+    artifactName: 'CADR_debs'
+  displayName: Upload Debian Packages Just Built to Artifact
+  condition: always()
+
+- script: |
+    sudo podman exec -i cadr bash -c "cd CADR && make BUILD_DIR=/CADR/build TEST_ONLY_REGTEST=1 test"
+  displayName: Test CADR
