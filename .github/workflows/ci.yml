@@ -8,7 +8,7 @@ on:
     branches: [ master ]
 
 env:
-  IMAGE_NAME: cadr/cadr
+  IMAGE_NAME: docker.io/hollowman6/cadr
   CI_SCRIPT: ci_build.sh
 
 jobs:
@@ -29,14 +29,19 @@ jobs:
           rm -f /etc/apt/sources.list.d/microsoft-prod.list
           EOF
           chmod +x $CI_SCRIPT
-      - name: Build CADR Running Environment Image
+      - name: Spawn Podman Container to Prepare Running Environment
         run: |
           sudo apt-get update
           sudo apt-get upgrade podman
-          sudo podman build -t $IMAGE_NAME .
-      - name: Spawn Podman Container to Prepare Running Environment
-        run: |
           sudo podman run --tmpfs /tmp --tmpfs /run --tmpfs /run/lock -v /sys/fs/cgroup:/sys/fs/cgroup:ro --privileged --systemd=true -d -v `pwd`:/CADR --name=cadr $IMAGE_NAME
+      # - name: Download from prebuilt Debian packages
+      #   run: |
+      #     sudo mkdir build
+      #     cd build
+      #     sudo pip install gdown
+      #     sudo gdown https://drive.google.com/uc?id=1aoj9upmFvuyFyEOlPEdCZuR24jA5BsLr
+      #     sudo unzip CADR_debs.zip
+      #     sudo ls
       - name: Build CADR
         run: |
           sudo podman exec -i cadr /CADR/$CI_SCRIPT

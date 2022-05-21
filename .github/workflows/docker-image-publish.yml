@@ -1,0 +1,27 @@
+name: Build CADR Docker image
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [ master ]
+
+env:
+  SITE: docker.io
+  IMAGE_NAME: cadr
+
+jobs:
+  image:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+      - name: Log into Docker Hub
+        run: echo ${{ secrets.DOCKERHUB_PW }} | sudo podman login $SITE -u ${{ secrets.DOCKERHUB_UN }} --password-stdin
+
+      - name: Build CADR Running Environment Image and Push
+        run: |
+          sudo apt-get update
+          sudo apt-get upgrade podman
+          IMAGE_ID=$SITE/${{ secrets.DOCKERHUB_UN }}/$IMAGE_NAME
+          IMAGE_ID=$(echo $IMAGE_ID | tr '[A-Z]' '[a-z]')
+          sudo podman build -t $IMAGE_ID .
+          sudo podman push $IMAGE_ID
