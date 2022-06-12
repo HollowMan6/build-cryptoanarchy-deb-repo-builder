@@ -41,6 +41,7 @@ steps:
     sudo pip install gdown
     sudo gdown https://drive.google.com/uc?id=1aoj9upmFvuyFyEOlPEdCZuR24jA5BsLr
     sudo unzip CADR_debs.zip -d build
+    sudo rm -rf CADR_debs.zip
   displayName: Download from prebuilt Debian packages
 
 # # Timeout would exceed (over 1 hr)
@@ -56,5 +57,5 @@ steps:
   condition: always()
 
 - script: |
-    sudo podman exec -i cadr bash -c "cd CADR && make BUILD_DIR=/CADR/build TEST_ONLY_REGTEST=1 test"
+    sudo podman exec -i cadr bash -c "cd CADR && make BUILD_DIR=/CADR/build test"
   displayName: Test CADR

@@ -34,17 +34,17 @@ jobs:
           sudo apt-get update
           sudo apt-get upgrade podman
           sudo podman run --tmpfs /tmp --tmpfs /run --tmpfs /run/lock -v /sys/fs/cgroup:/sys/fs/cgroup:ro --privileged --systemd=true -d -v `pwd`:/CADR --name=cadr $IMAGE_NAME
-      # - name: Download from prebuilt Debian packages
-      #   run: |
-      #     sudo mkdir build
-      #     cd build
-      #     sudo pip install gdown
-      #     sudo gdown https://drive.google.com/uc?id=1aoj9upmFvuyFyEOlPEdCZuR24jA5BsLr
-      #     sudo unzip CADR_debs.zip
-      #     sudo ls
-      - name: Build CADR
+      - name: Download from prebuilt Debian packages
         run: |
-          sudo podman exec -i cadr /CADR/$CI_SCRIPT
+          sudo mkdir build
+          cd build
+          sudo pip install gdown
+          sudo gdown https://drive.google.com/uc?id=1aoj9upmFvuyFyEOlPEdCZuR24jA5BsLr
+          sudo unzip CADR_debs.zip
+          sudo rm -rf CADR_debs.zip
+      # - name: Build CADR
+      #   run: |
+      #     sudo podman exec -i cadr /CADR/$CI_SCRIPT
       - name: Upload Debian Packages Just Built to Artifact
         uses: actions/upload-artifact@v2
         if: ${{ always() }}
@@ -53,4 +53,4 @@ jobs:
           path: build/*.deb
       - name: Test CADR
         run: |
-          sudo podman exec -i cadr bash -c "cd CADR && make BUILD_DIR=/CADR/build TEST_ONLY_REGTEST=1 test"
+          sudo podman exec -i cadr bash -c "cd CADR && make BUILD_DIR=/CADR/build test"
