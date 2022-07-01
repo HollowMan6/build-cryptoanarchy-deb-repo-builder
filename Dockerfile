@@ -14,7 +14,7 @@ RUN apt-get update && apt-get dist-upgrade && \
     update-ca-certificates && \
     wget https://packages.microsoft.com/config/debian/10/packages-microsoft-prod.deb -O packages-microsoft-prod.deb && \
     dpkg -i packages-microsoft-prod.deb && \
-    cargo install --git https://github.com/Kixunil/debcrafter && \
+    cargo install --git https://github.com/HollowMan6/debcrafter && \
     cargo install cfg_me && \
     mkdir -p /tmp/tmpcargobin && cp /root/.cargo/bin/* /tmp/tmpcargobin && \
     rm -rf /root/.cargo/* && mv /tmp/tmpcargobin /root/.cargo/bin && \
