@@ -1,0 +1,39 @@
+name: Self-Hosted CADR CI
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [ master ]
+
+jobs:
+  ci:
+    runs-on: self-hosted
+    steps:
+      - uses: actions/checkout@v2
+      - name: Preparation
+        run: |
+          sudo apt-get update
+      - name: Download from prebuilt Debian packages
+        run: |
+          mkdir build
+          cd build
+          pip install gdown
+          gdown https://drive.google.com/uc?id=1aoj9upmFvuyFyEOlPEdCZuR24jA5BsLr
+          unzip CADR_debs.zip
+          rm -rf CADR_debs.zip
+      # - name: Build CADR
+      #   run: |
+      #     mkdir build
+      #     MKCMD="make BUILD_DIR=`pwd`/build"
+      #     $MKCMD build-dep
+      #     $MKCMD all
+      #     rm -f /etc/apt/sources.list.d/microsoft-prod.list
+      # - name: Upload Debian Packages Just Built to Artifact
+      #   uses: actions/upload-artifact@v2
+      #   if: ${{ always() }}
+      #   with:
+      #     name: CADR_debs
+      #     path: build/*.deb
+      - name: Test CADR
+        run: |
+          make BUILD_DIR=`pwd`/build test
