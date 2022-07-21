@@ -12,7 +12,7 @@ env:
   CI_SCRIPT: ci_build.sh
 
 jobs:
-  ci:
+  build:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v2
@@ -33,19 +33,60 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get upgrade podman
-          sudo podman build -t $IMAGE_NAME .
+          sudo -E XDG_RUNTIME_DIR= podman build -t $IMAGE_NAME .
+          sudo -E XDG_RUNTIME_DIR= podman save $IMAGE_NAME > CADR_image.tar
+      - name: Upload the Running Environment Image to Artifact
+        uses: actions/upload-artifact@v2
+        if: ${{ always() }}
+        with:
+          name: CADR_image
+          path: CADR_image.tar
       - name: Spawn Podman Container to Prepare Running Environment
         run: |
-          sudo podman run --tmpfs /tmp --tmpfs /run --tmpfs /run/lock -v /sys/fs/cgroup:/sys/fs/cgroup:ro --privileged --systemd=true -d -v `pwd`:/CADR --name=cadr $IMAGE_NAME
+          sudo -E XDG_RUNTIME_DIR= podman run --tmpfs /tmp --tmpfs /run --tmpfs /run/lock -v /sys/fs/cgroup:/sys/fs/cgroup:ro --privileged --systemd=true -d -v `pwd`:/CADR --name=cadr $IMAGE_NAME
       - name: Build CADR
         run: |
-          sudo podman exec -i cadr /CADR/$CI_SCRIPT
+          sudo -E XDG_RUNTIME_DIR= podman exec -i cadr /CADR/$CI_SCRIPT
       - name: Upload Debian Packages Just Built to Artifact
         uses: actions/upload-artifact@v2
         if: ${{ always() }}
         with:
           name: CADR_debs
           path: build/*.deb
-      - name: Test CADR
+  test:
+    needs: build
+    if: ${{ always() && !cancelled() && needs.build.result == 'success' }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        package: ["selfhost-clearnet-certbot", "bitcoind", "bitcoin-mainnet", "bitcoin-regtest", "bitcoin-pruned-mainnet", "bitcoin-fullchain-mainnet", "bitcoin-fullchain-regtest", "bitcoin-txindex-mainnet", "bitcoin-zmq-mainnet", "bitcoin-zmq-regtest", "bitcoin-rpc-proxy", "bitcoin-rpc-proxy-mainnet", "bitcoin-rpc-proxy-regtest", "bitcoin-timechain-mainnet", "electrs", "electrs-mainnet", "electrs-regtest", "btcpayserver", "btcpayserver-system-mainnet", "btcpayserver-system-regtest", "lnd", "lnd-system-mainnet", "lnd-system-regtest", "lnd-unlocker-system-mainnet", "lnd-unlocker-system-mainnet", "ridetheln", "ridetheln-system", "ridetheln-lnd-system-mainnet", "ridetheln-lnd-system-regtest", "selfhost", "selfhost-nginx", "selfhost-onion", "selfhost-clearnet", "tor-hs-patch-config", "thunderhub", "thunderhub-system-mainnet", "thunderhub-system-regtest", "btc-rpc-explorer-mainnet", "lndconnect", "selfhost-dashboard-bin", "selfhost-dashboard", "btc-transmuter", "btc-transmuter-system-mainnet", "btc-transmuter-system-regtest"]
+    steps:
+      - uses: actions/checkout@v2
+      - name: Prepare Podman Container Running Environment
         run: |
-          sudo podman exec -i cadr bash -c "cd CADR && make BUILD_DIR=/CADR/build TEST_ONLY_REGTEST=1 test"
+          sudo apt-get update
+          sudo apt-get upgrade podman
+      - uses: actions/download-artifact@v3
+        with:
+          name: CADR_image
+          path: .
+      - name: Load Running Environment Image
+        run: |
+          sudo -E XDG_RUNTIME_DIR= podman load < CADR_image.tar
+          mkdir build
+      - uses: actions/download-artifact@v3
+        with:
+          name: CADR_debs
+          path: build
+      - name: Test CADR Basic
+        run: |
+          sudo -E XDG_RUNTIME_DIR= podman run --tmpfs /tmp --tmpfs /run --tmpfs /run/lock -v /sys/fs/cgroup:/sys/fs/cgroup:ro --privileged --systemd=true -d -v `pwd`:/CADR --name=cadr $IMAGE_NAME
+          sudo -E XDG_RUNTIME_DIR= podman exec -i cadr bash -c "rm -f /etc/apt/sources.list.d/microsoft-prod.list"
+          sudo -E XDG_RUNTIME_DIR= podman exec -i cadr bash -c "cd CADR && make BUILD_DIR=/CADR/build test-here-basic-${{ matrix.package }}"
+          sudo -E XDG_RUNTIME_DIR= podman rm -f cadr
+      - name: Test CADR Upgrade
+        run: |
+          sudo -E XDG_RUNTIME_DIR= podman run --tmpfs /tmp --tmpfs /run --tmpfs /run/lock -v /sys/fs/cgroup:/sys/fs/cgroup:ro --privileged --systemd=true -d -v `pwd`:/CADR --name=cadr $IMAGE_NAME
+          sudo -E XDG_RUNTIME_DIR= podman exec -i cadr bash -c "rm -f /etc/apt/sources.list.d/microsoft-prod.list"
+          sudo -E XDG_RUNTIME_DIR= podman exec -i cadr bash -c "cd CADR && make BUILD_DIR=/CADR/build SPLIT_STRATEGY=upgrade test-here-upgrade-${{ matrix.package }}"
